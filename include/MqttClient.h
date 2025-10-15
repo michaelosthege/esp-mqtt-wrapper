@@ -1,68 +1,70 @@
 #pragma once
 
 #include <functional>
+#include "esp_event.h"
+#include "mqtt_client.h"
 
-#if defined(ESP32) || defined(ESP8266)
-#include <WiFi.h>
-#include <PubSubClient.h>
-#elif defined(ARDUINO)
-#include <Arduino.h>
-#else
-typedef unsigned char byte;
-#endif
+typedef std::function<void(const char* topic, const char* payload, size_t length)> MessageCallback;
+typedef std::function<void()> SimpleCallback;
 
-class MqttClient
-{
+class MqttClient {
 public:
-  using MessageCallback = std::function<void(const char *topic, const char *payload)>;
-  using SimpleCallback = std::function<void(void)>;
+  static MqttClient* getInstance();
 
-  MqttClient();
-  ~MqttClient();
+  void begin(const char* brokerUri);
+  void setServer(const char* host, uint16_t port);
+  void setCredentials(const char* username, const char* password);
+  void setKeepalive(uint16_t keepalive);
+  void setProtocolFallback(bool enableFallback); // Enable v3.1.1 fallback if v5 fails
 
-  void begin(const char *brokerUri);
-  void begin(const char *brokerUri, const char *username, const char *password, uint16_t keepalive = 60);
-
-  bool connect(const char *clientId = nullptr);
+  bool connect(const char* clientId);
   void disconnect();
+  bool isConnected() const;
 
-  int publish(const char *topic, const char *payload, bool retain = false);
-  int subscribe(const char *topic, int qos = 0);
-  int unsubscribe(const char *topic);
+  // Communication
+  int publish(const char* topic, const char* payload, bool retain = false);
+  int subscribe(const char* topic, int qos = 0);
+  int unsubscribe(const char* topic);
 
+  // Event callbacks
   void onMessage(MessageCallback cb);
   void onConnect(SimpleCallback cb);
   void onDisconnect(SimpleCallback cb);
 
-  bool isConnected() const;
+  // Processing
+  void loop(); // No-op for event-driven esp-mqtt
+
+  ~MqttClient();
 
 private:
-  char _brokerUri[128];
-  char _brokerHost[64];
-  int _brokerPort;
-  char _username[64];
-  char _password[64];
+  MqttClient();
+  static MqttClient* _instance;
+
+  void* _client; // esp_mqtt_client_handle_t
+  char* _host;
+  uint16_t _port;
+  char* _username;
+  char* _password;
+  char* _clientId;
   uint16_t _keepalive;
+  bool _connected;
 
-#if defined(ESP32) || defined(ESP8266)
-  WiFiClient _wifiClient;
-  PubSubClient _pubSubClient;
-#else
-  void *_pubSubClient;
-#endif
+  // Fallback configuration
+  bool _enableFallback;
+  bool _usingFallback;
 
-  bool _isConnected;
+  bool connectWithProtocol(esp_mqtt_protocol_ver_t protocol);
+  void reconnectWithFallback();
 
-  MessageCallback _messageCb;
-  SimpleCallback _legacyConnectCb;
-  SimpleCallback _legacyDisconnectCb;
+  MessageCallback _messageCallback;
+  SimpleCallback _connectCallback;
+  SimpleCallback _disconnectCallback;
 
-  static void onMessageReceived(char *topic, byte *payload, unsigned int length);
-  void handleMessage(const char *topic, const char *payload);
+  void parseUriComponents(const char* uri);
+  void handleMessage(const char* topic, const char* payload);
 
-  void parseUriComponents(const char *uri);
-  static MqttClient *_instance;
-
-  MqttClient(const MqttClient &) = delete;
-  MqttClient &operator=(const MqttClient &) = delete;
+public:
+  void onConnectedInternal();
+  void onDisconnectedInternal();
+  void onDataInternal(const char* topic, const char* data, int data_len);
 };

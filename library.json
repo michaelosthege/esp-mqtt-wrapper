@@ -1,6 +1,6 @@
 {
   "name": "MqttClient",
-  "version": "1.0.2",
+  "version": "1.0.3",
   "description": "MQTT Client library for PlatformIO",
   "keywords": ["mqtt", "client", "communication"],
   "repository": {

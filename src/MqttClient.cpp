@@ -130,6 +130,10 @@ MqttClient::MqttClient()
     : _client(nullptr),
       _host(nullptr),
       _port(1883),
+  _path(nullptr),
+  _useWebSocket(false),
+  _secure(false),
+  _uri(nullptr),
       _username(nullptr),
       _password(nullptr),
       _clientId(nullptr),
@@ -152,28 +156,34 @@ MqttClient::~MqttClient() {
     esp_mqtt_client_destroy(static_cast<esp_mqtt_client_handle_t>(_client));
   }
   free(_host);
+  free(_path);
+  free(_uri);
   free(_username);
   free(_password);
   free(_clientId);
 }
 
 void MqttClient::parseUriComponents(const char* uri) {
-  // Simple URI parsing for mqtt://host:port
-  const char* start = strstr(uri, "://");
-  if (start) {
-    start += 3; // Skip ://
-    const char* portStart = strchr(start, ':');
-    if (portStart) {
-      size_t hostLen = portStart - start;
-      _host = static_cast<char*>(realloc(_host, hostLen + 1));
-      memcpy(_host, start, hostLen);
-      _host[hostLen] = '\0';
-      _port = static_cast<uint16_t>(atoi(portStart + 1));
-    } else {
-      _host = static_cast<char*>(realloc(_host, strlen(start) + 1));
-      strcpy(_host, start);
-      _port = 1883; // Default MQTT port
-    }
+  // Parse scheme, host, port, and optional path for ws/wss
+  UriParts parts;
+  if (!parseMqttUri(std::string(uri), parts)) {
+    Serial.println("[MQTT][ERROR] Invalid broker URI");
+    return;
+  }
+
+  // Store host and port
+  _host = static_cast<char*>(realloc(_host, parts.host.size() + 1));
+  memcpy(_host, parts.host.c_str(), parts.host.size() + 1);
+  _port = parts.port;
+
+  // Transport flags
+  _useWebSocket = parts.isWebSocket();
+  _secure = parts.isSecure();
+
+  // Path for WebSocket
+  if (_useWebSocket) {
+    _path = static_cast<char*>(realloc(_path, parts.path.size() + 1));
+    memcpy(_path, parts.path.c_str(), parts.path.size() + 1);
   }
 }
 
@@ -185,6 +195,17 @@ void MqttClient::setServer(const char* host, uint16_t port) {
   _host = static_cast<char*>(realloc(_host, strlen(host) + 1));
   strcpy(_host, host);
   _port = port;
+}
+
+void MqttClient::setWebSocket(bool enable) {
+  _useWebSocket = enable;
+}
+
+void MqttClient::setPath(const char* path) {
+  if (!path) return;
+  size_t len = strlen(path);
+  _path = static_cast<char*>(realloc(_path, len + 1));
+  strcpy(_path, path);
 }
 
 void MqttClient::setCredentials(const char* username, const char* password) {
@@ -248,6 +269,9 @@ bool MqttClient::connectWithProtocol(esp_mqtt_protocol_ver_t protocol) {
   Serial.print("[MQTT][INFO] Configuring for MQTT ");
   Serial.println(protocolName);
 
+  // Build a URI if using WebSocket or when a path is specified
+  buildUriIfNeeded();
+
 #ifdef ESP_IDF_VERSION_MAJOR
 #if ESP_IDF_VERSION >= ESP_IDF_VERSION_VAL(5, 0, 0)
   esp_mqtt_client_config_t mqtt_cfg = {
@@ -255,8 +279,10 @@ bool MqttClient::connectWithProtocol(esp_mqtt_protocol_ver_t protocol) {
           {
               .address =
                   {
-                      .hostname = _host,
-                      .port = _port,
+                      // Prefer URI when using WebSocket or when explicitly built
+                      .uri = _uri ? _uri : nullptr,
+                      .hostname = _uri ? nullptr : _host,
+                      .port = _uri ? 0 : _port,
                   },
           },
       .credentials =
@@ -276,8 +302,12 @@ bool MqttClient::connectWithProtocol(esp_mqtt_protocol_ver_t protocol) {
   };
 #else
   esp_mqtt_client_config_t mqtt_cfg = {};
-  mqtt_cfg.host = _host;
-  mqtt_cfg.port = _port;
+  if (_uri) {
+    mqtt_cfg.uri = _uri;
+  } else {
+    mqtt_cfg.host = _host;
+    mqtt_cfg.port = _port;
+  }
   mqtt_cfg.client_id = _clientId;
   mqtt_cfg.username = _username;
   mqtt_cfg.password = _password;
@@ -286,8 +316,12 @@ bool MqttClient::connectWithProtocol(esp_mqtt_protocol_ver_t protocol) {
 #endif
 #else
   esp_mqtt_client_config_t mqtt_cfg = {};
-  mqtt_cfg.host = _host;
-  mqtt_cfg.port = _port;
+  if (_uri) {
+    mqtt_cfg.uri = _uri;
+  } else {
+    mqtt_cfg.host = _host;
+    mqtt_cfg.port = _port;
+  }
   mqtt_cfg.client_id = _clientId;
   mqtt_cfg.username = _username;
   mqtt_cfg.password = _password;
@@ -312,7 +346,11 @@ bool MqttClient::connectWithProtocol(esp_mqtt_protocol_ver_t protocol) {
                                  mqtt_event_handler,
                                  this);
 
-  Serial.printf("[MQTT] Connecting to %s:%d as %s (%s)\n", _host, _port, _clientId, protocolName);
+  if (_uri) {
+    Serial.printf("[MQTT] Connecting to %s as %s (%s)\n", _uri, _clientId, protocolName);
+  } else {
+    Serial.printf("[MQTT] Connecting to %s:%d as %s (%s)\n", _host, _port, _clientId, protocolName);
+  }
   Serial.printf("[MQTT] Config: keepalive=%ds, username=%s, password=%s\n",
                 _keepalive,
                 _username ? _username : "(none)",
@@ -438,4 +476,25 @@ void MqttClient::onDataInternal(const char* topic, const char* data, int data_le
 }
 void MqttClient::loop() {
   // No-op: esp-mqtt is event-driven
+}
+
+void MqttClient::buildUriIfNeeded() {
+  // Free previous URI if any
+  if (_uri) {
+    free(_uri);
+    _uri = nullptr;
+  }
+
+  if (_useWebSocket || (_path && *_path)) {
+    // Build scheme
+    UriParts parts;
+    parts.scheme = _secure ? (_useWebSocket ? "wss" : "mqtts") : (_useWebSocket ? "ws" : "mqtt");
+    parts.host = _host ? _host : "";
+    parts.port = _port;
+    parts.path = _useWebSocket ? (_path ? _path : "/") : std::string();
+
+    std::string uri = buildMqttUri(parts);
+    _uri = static_cast<char*>(malloc(uri.size() + 1));
+    strcpy(_uri, uri.c_str());
+  }
 }

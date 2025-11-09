@@ -60,6 +60,29 @@ void loop() {
 }
 ```
 
+### WebSocket Transport with Path
+
+You can connect over WebSocket by using a `ws://` or `wss://` URI, including a path if required by your broker:
+
+```cpp
+MqttClient* mqtt = MqttClient::getInstance();
+
+// Example: WebSocket with custom path
+mqtt->begin("wss://broker.example.com:443/mqtt");
+mqtt->setCredentials("username", "password");
+mqtt->setProtocolFallback(true); // optional
+mqtt->connect("my-client-id");
+```
+
+Alternatively, you can configure WebSocket transport and path programmatically:
+
+```cpp
+mqtt->setServer("broker.example.com", 443);
+mqtt->setWebSocket(true);
+mqtt->setPath("/mqtt");
+mqtt->connect("my-client-id");
+```
+
 ### Advanced Usage (MQTT 5.0 Features)
 
 ```cpp

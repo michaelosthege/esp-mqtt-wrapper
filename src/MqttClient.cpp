@@ -239,8 +239,7 @@ bool MqttClient::connect(const char* clientId) {
     return false;
   }
 
-  Serial.print("[MQTT][INFO] Attempting connection with client ID: ");
-  Serial.println(clientId);
+  Serial.printf("[MQTT][INFO] Attempting connection with client ID: %s\n", clientId);
 
   // Try MQTT v5 first
   Serial.println("[MQTT][INFO] Attempting MQTT v5 connection...");
@@ -266,8 +265,7 @@ bool MqttClient::connect(const char* clientId) {
 
 bool MqttClient::connectWithProtocol(esp_mqtt_protocol_ver_t protocol) {
   const char* protocolName = (protocol == MQTT_PROTOCOL_V_5) ? "v5" : "v3.1.1";
-  Serial.print("[MQTT][INFO] Configuring for MQTT ");
-  Serial.println(protocolName);
+  Serial.printf("[MQTT][INFO] Configuring for MQTT %s\n", protocolName);
 
   // Build a URI if using WebSocket or when a path is specified
   buildUriIfNeeded();
@@ -336,8 +334,7 @@ bool MqttClient::connectWithProtocol(esp_mqtt_protocol_ver_t protocol) {
 
   _client = esp_mqtt_client_init(&mqtt_cfg);
   if (!_client) {
-    Serial.print("[MQTT][ERROR] Failed to initialize client for ");
-    Serial.println(protocolName);
+    Serial.printf("[MQTT][ERROR] Failed to initialize client for %s\n", protocolName);
     return false;
   }
 
@@ -358,14 +355,10 @@ bool MqttClient::connectWithProtocol(esp_mqtt_protocol_ver_t protocol) {
 
   esp_err_t result = esp_mqtt_client_start(static_cast<esp_mqtt_client_handle_t>(_client));
   if (result == ESP_OK) {
-    Serial.print("[MQTT][INFO] Client started successfully for ");
-    Serial.println(protocolName);
+    Serial.printf("[MQTT][INFO] Client started successfully for %s\n", protocolName);
     return true;
   } else {
-    Serial.print("[MQTT][ERROR] Failed to start client for ");
-    Serial.print(protocolName);
-    Serial.print(", error: ");
-    Serial.println(result);
+    Serial.printf("[MQTT][ERROR] Failed to start client for %s, error: %d\n", protocolName, result);
     return false;
   }
 }

@@ -4,6 +4,9 @@ A comprehensive MQTT 5.0 client library for ESP8266/ESP32 platforms built with P
 
 ## Features
 
+> [!CAUTION]
+> The README is outdated and does not match the actual API.
+
 ### MQTT 5.0 Support
 
 - **Enhanced Authentication**: Support for SCRAM, OAuth, and custom authentication methods
@@ -34,7 +37,7 @@ A comprehensive MQTT 5.0 client library for ESP8266/ESP32 platforms built with P
 ```cpp
 #include "MqttClient.h"
 
-MqttClient mqtt;
+MqttClient mqtt = *MqttClient::getInstance();
 
 void setup() {
     // Simple connection (MQTT 3.1.1 compatible)

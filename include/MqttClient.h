@@ -29,7 +29,7 @@ public:
   bool isConnected() const;
 
   // Communication
-  int publish(const char* topic, const char* payload, bool retain = false);
+  int publish(const char* topic, const char* payload, int qos = 0, bool retain = false);
   int subscribe(const char* topic, int qos = 0);
   int unsubscribe(const char* topic);
 

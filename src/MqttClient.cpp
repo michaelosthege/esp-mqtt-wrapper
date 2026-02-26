@@ -441,12 +441,12 @@ void MqttClient::disconnect() {
   }
 }
 
-int MqttClient::publish(const char* topic, const char* payload, bool retain) {
+int MqttClient::publish(const char* topic, const char* payload, int qos, bool retain) {
   if (!_client)
     return -1;
 
   int msg_id =
-      esp_mqtt_client_publish(static_cast<esp_mqtt_client_handle_t>(_client), topic, payload, 0, 1, retain ? 1 : 0);
+      esp_mqtt_client_publish(static_cast<esp_mqtt_client_handle_t>(_client), topic, payload, 0, qos, retain ? 1 : 0);
   return msg_id;
 }
 

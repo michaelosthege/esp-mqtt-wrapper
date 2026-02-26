@@ -1,3 +1,4 @@
+#include "Arduino.h"
 #include <unity.h>
 #include "UriUtils.h"
 
@@ -43,11 +44,33 @@ void test_build_ws_uri() {
   TEST_ASSERT_EQUAL_STRING("ws://broker.example.com:8080/mqtt", uri.c_str());
 }
 
-int main(int argc, char **argv) {
-  UNITY_BEGIN();
-  RUN_TEST(test_parse_ws_with_path);
-  RUN_TEST(test_parse_wss_default_port_and_path_default);
-  RUN_TEST(test_parse_mqtt_no_path);
-  RUN_TEST(test_build_ws_uri);
-  return UNITY_END();
+int runUnityTests(void)
+{
+    UNITY_BEGIN();
+    RUN_TEST(test_parse_ws_with_path);
+    RUN_TEST(test_parse_wss_default_port_and_path_default);
+    RUN_TEST(test_parse_mqtt_no_path);
+    RUN_TEST(test_build_ws_uri);
+    return UNITY_END();
+}
+
+/// @brief For native framework
+/// @param  
+/// @return 
+int main(void) {
+    return runUnityTests();
+}
+
+/// @brief For Arduino framework
+void setup() {
+    // Wait ~2 seconds before the Unity test runner
+    // establishes connection with a board Serial interface
+    delay(2000);
+    runUnityTests();
+}
+void loop() {}
+
+/// @brief For ESP-IDF framework
+void app_main() {
+    runUnityTests();
 }

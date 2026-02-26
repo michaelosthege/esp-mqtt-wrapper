@@ -140,10 +140,10 @@ MqttClient::MqttClient()
       _host(nullptr),
       _port(1883),
       _certificate(nullptr),
-  _path(nullptr),
-  _useWebSocket(false),
-  _secure(false),
-  _uri(nullptr),
+      _path(nullptr),
+      _useWebSocket(false),
+      _secure(false),
+      _uri(nullptr),
       _username(nullptr),
       _password(nullptr),
       _clientId(nullptr),
@@ -496,6 +496,7 @@ void MqttClient::onDataInternal(const char* topic, const char* data, int data_le
     _messageCallback(topic, data, data_len);
   }
 }
+
 void MqttClient::loop() {
   // No-op: esp-mqtt is event-driven
 }

@@ -147,6 +147,10 @@ MqttClient::MqttClient()
       _username(nullptr),
       _password(nullptr),
       _clientId(nullptr),
+      _lwt_topic(nullptr),
+      _lwt_msg(nullptr),
+      _lwt_qos(0),
+      _lwt_retain(false),
       _keepalive(30),
       _connected(false),
       _enableFallback(false),
@@ -172,6 +176,8 @@ MqttClient::~MqttClient() {
   free(_username);
   free(_password);
   free(_clientId);
+  free(_lwt_topic);
+  free(_lwt_msg);
 }
 
 void MqttClient::parseUriComponents(const char* uri) {
@@ -243,6 +249,21 @@ void MqttClient::setProtocolFallback(bool enableFallback) {
   _enableFallback = enableFallback;
   Serial.print("[MQTT][INFO] Protocol fallback ");
   Serial.println(enableFallback ? "enabled" : "disabled");
+}
+
+/// @brief Set the Last Will and Testament (LWT) message.
+/// Muast be called before connect() to take effect.
+/// @param topic 
+/// @param payload 
+/// @param qos 
+/// @param retain 
+void MqttClient::setLastWill(const char* topic, const char* payload, int qos, bool retain) {
+  _lwt_topic = static_cast<char*>(realloc(_lwt_topic, strlen(topic) + 1));
+  strcpy(_lwt_topic, topic);
+  _lwt_msg = static_cast<char*>(realloc(_lwt_msg, strlen(payload) + 1));
+  strcpy(_lwt_msg, payload);
+  _lwt_qos = qos;
+  _lwt_retain = retain;
 }
 
 bool MqttClient::connect(const char* clientId) {
@@ -318,6 +339,14 @@ bool MqttClient::connectWithProtocol(esp_mqtt_protocol_ver_t protocol) {
           {
               .keepalive = _keepalive,
               .protocol_ver = protocol,
+              .last_will =
+                  {
+                      .topic = _lwt_topic,
+                      .msg = _lwt_msg,
+                      .qos = _lwt_qos,
+                      .retain = _lwt_retain ? 1 : 0,
+                      .msg_len = _lwt_msg ? strlen(_lwt_msg) : 0,
+                  },
           },
   };
 #else
@@ -330,6 +359,13 @@ bool MqttClient::connectWithProtocol(esp_mqtt_protocol_ver_t protocol) {
   }
   if (_certificate) {
     mqtt_cfg.cert_pem = _certificate;
+  }
+  if (_lwt_topic && _lwt_msg) {
+    mqtt_cfg.lwt_topic = _lwt_topic;
+    mqtt_cfg.lwt_msg = _lwt_msg;
+    mqtt_cfg.lwt_qos = _lwt_qos;
+    mqtt_cfg.lwt_retain = _lwt_retain ? 1 : 0;
+    mqtt_cfg.lwt_msg_len = strlen(_lwt_msg);
   }
   mqtt_cfg.client_id = _clientId;
   mqtt_cfg.username = _username;
@@ -348,6 +384,13 @@ bool MqttClient::connectWithProtocol(esp_mqtt_protocol_ver_t protocol) {
   }
   if (_certificate) {
     mqtt_cfg.cert_pem = _certificate;
+  }
+  if (_lwt_topic && _lwt_msg) {
+    mqtt_cfg.lwt_topic = _lwt_topic;
+    mqtt_cfg.lwt_msg = _lwt_msg;
+    mqtt_cfg.lwt_qos = _lwt_qos;
+    mqtt_cfg.lwt_retain = _lwt_retain ? 1 : 0;
+    mqtt_cfg.lwt_msg_len = strlen(_lwt_msg);
   }
   mqtt_cfg.client_id = _clientId;
   mqtt_cfg.username = _username;

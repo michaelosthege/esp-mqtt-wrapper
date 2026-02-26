@@ -22,6 +22,7 @@ public:
   void setCredentials(const char* username, const char* password);
   void setKeepalive(uint16_t keepalive);
   void setProtocolFallback(bool enableFallback); // Enable v3.1.1 fallback if v5 fails
+  void setLastWill(const char* topic, const char* payload, int qos, bool retain);
 
   bool connect(const char* clientId);
   void disconnect();
@@ -57,6 +58,10 @@ private:
   char* _username;
   char* _password;
   char* _clientId;
+  char* _lwt_topic;
+  char* _lwt_msg;
+  int _lwt_qos;
+  bool _lwt_retain;
   uint16_t _keepalive;
   bool _connected;
 

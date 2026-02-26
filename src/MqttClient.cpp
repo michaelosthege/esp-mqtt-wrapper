@@ -64,6 +64,12 @@ void mqtt_event_handler(void* handler_args, esp_event_base_t base, int32_t event
       Serial.printf("[MQTT] Message on %s: %s\n", topic, data);
       client->onDataInternal(topic, data, event->data_len);
     } break;
+    case MQTT_EVENT_BEFORE_CONNECT:
+      Serial.println("[MQTT] Before connect event");
+      break;
+    case MQTT_EVENT_DELETED:
+      Serial.printf("[MQTT] Message deleted from outbox, msg_id=%d\n", event->msg_id);
+      break;
     case MQTT_EVENT_ERROR:
       Serial.println("[MQTT][ERROR] Error event details:");
       if (event->error_handle->error_type == MQTT_ERROR_TYPE_TCP_TRANSPORT) {

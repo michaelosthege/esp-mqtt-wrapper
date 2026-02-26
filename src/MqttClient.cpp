@@ -13,6 +13,7 @@
 #else
 #include "esp_mqtt_client.h"
 #endif
+#include "esp_tls.h"
 
 // Define MQTT v5 constant if not available
 #ifndef MQTT_PROTOCOL_V_5
@@ -76,6 +77,8 @@ void mqtt_event_handler(void* handler_args, esp_event_base_t base, int32_t event
         Serial.printf("  TCP transport error=%d, sock_errno=%d\n",
                       event->error_handle->esp_tls_last_esp_err,
                       event->error_handle->esp_transport_sock_errno);
+        Serial.printf("  Last error code reported from esp-tls: 0x%x\n", event->error_handle->esp_tls_last_esp_err);
+        Serial.printf("  Last tls stack error number: 0x%x\n", event->error_handle->esp_tls_stack_err);
       } else if (event->error_handle->error_type == MQTT_ERROR_TYPE_CONNECTION_REFUSED) {
         Serial.printf("  Connection refused, return_code=%d\n", event->error_handle->connect_return_code);
         // MQTT v5 reason codes: 0x80=unspecified, 0x81=malformed, 0x82=protocol, etc.
@@ -136,6 +139,7 @@ MqttClient::MqttClient()
     : _client(nullptr),
       _host(nullptr),
       _port(1883),
+      _certificate(nullptr),
   _path(nullptr),
   _useWebSocket(false),
   _secure(false),
@@ -162,6 +166,7 @@ MqttClient::~MqttClient() {
     esp_mqtt_client_destroy(static_cast<esp_mqtt_client_handle_t>(_client));
   }
   free(_host);
+  free(_certificate);
   free(_path);
   free(_uri);
   free(_username);
@@ -195,6 +200,11 @@ void MqttClient::parseUriComponents(const char* uri) {
 
 void MqttClient::begin(const char* brokerUri) {
   parseUriComponents(brokerUri);
+}
+
+void MqttClient::setTlsCertificate(const char* certificate) {
+  _certificate = static_cast<char*>(realloc(_certificate, strlen(certificate) + 1));
+  strcpy(_certificate, certificate);
 }
 
 void MqttClient::setServer(const char* host, uint16_t port) {
@@ -275,8 +285,10 @@ bool MqttClient::connectWithProtocol(esp_mqtt_protocol_ver_t protocol) {
 
   // Build a URI if using WebSocket or when a path is specified
   buildUriIfNeeded();
+  Serial.printf("[MQTT][DEBUG] Using URI: %s\n", _uri ? _uri : "(none)");
 
 #ifdef ESP_IDF_VERSION_MAJOR
+  Serial.printf("[MQTT][DEBUG] Configuring for protocol %s under ESP-IDF version %d.%d.%d\n", protocolName, ESP_IDF_VERSION_MAJOR, ESP_IDF_VERSION_MINOR, ESP_IDF_VERSION_PATCH);
 #if ESP_IDF_VERSION >= ESP_IDF_VERSION_VAL(5, 0, 0)
   esp_mqtt_client_config_t mqtt_cfg = {
       .broker =
@@ -287,6 +299,10 @@ bool MqttClient::connectWithProtocol(esp_mqtt_protocol_ver_t protocol) {
                       .uri = _uri ? _uri : nullptr,
                       .hostname = _uri ? nullptr : _host,
                       .port = _uri ? 0 : _port,
+                  },
+              .verification =
+                  {
+                      .certificate = _certificate ? _certificate : nullptr,
                   },
           },
       .credentials =
@@ -312,6 +328,9 @@ bool MqttClient::connectWithProtocol(esp_mqtt_protocol_ver_t protocol) {
     mqtt_cfg.host = _host;
     mqtt_cfg.port = _port;
   }
+  if (_certificate) {
+    mqtt_cfg.cert_pem = _certificate;
+  }
   mqtt_cfg.client_id = _clientId;
   mqtt_cfg.username = _username;
   mqtt_cfg.password = _password;
@@ -319,12 +338,16 @@ bool MqttClient::connectWithProtocol(esp_mqtt_protocol_ver_t protocol) {
   mqtt_cfg.protocol_ver = protocol;
 #endif
 #else
+  Serial.printf("[MQTT][DEBUG] Configuring for protocol %s under old ESP-IDF version %d.%d.%d\n", protocolName, ESP_IDF_VERSION_MAJOR, ESP_IDF_VERSION_MINOR, ESP_IDF_VERSION_PATCH);
   esp_mqtt_client_config_t mqtt_cfg = {};
   if (_uri) {
     mqtt_cfg.uri = _uri;
   } else {
     mqtt_cfg.host = _host;
     mqtt_cfg.port = _port;
+  }
+  if (_certificate) {
+    mqtt_cfg.cert_pem = _certificate;
   }
   mqtt_cfg.client_id = _clientId;
   mqtt_cfg.username = _username;
@@ -484,7 +507,7 @@ void MqttClient::buildUriIfNeeded() {
     _uri = nullptr;
   }
 
-  if (_useWebSocket || (_path && *_path)) {
+  if (_useWebSocket || (_path && *_path) || _secure) {
     // Build scheme
     UriParts parts;
     parts.scheme = _secure ? (_useWebSocket ? "wss" : "mqtts") : (_useWebSocket ? "ws" : "mqtt");

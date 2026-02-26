@@ -13,6 +13,7 @@ public:
   static MqttClient* getInstance();
 
   void begin(const char* brokerUri);
+  void setTlsCertificate(const char* certificate);
   void setServer(const char* host, uint16_t port);
   // Enable/disable WebSocket transport. When enabled, a path can be set.
   void setWebSocket(bool enable);
@@ -48,6 +49,7 @@ private:
   void* _client; // esp_mqtt_client_handle_t
   char* _host;
   uint16_t _port;
+  char* _certificate; // TLS certificate of the server
   char* _path;        // WebSocket path (e.g., "/mqtt")
   bool _useWebSocket; // Transport over WebSocket
   bool _secure;       // mqtts/wss
